@@ -90,6 +90,8 @@ npm run typecheck
 
 ## Deploy (Cloudflare)
 
-`npx wrangler deploy` using [wrangler.toml](wrangler.toml) /
-[server/worker.ts](server/worker.ts); serve `dist/` with Cloudflare Pages or
-any static host pointed at the Worker for `/api/*`.
+`npm run build && npx wrangler deploy` using [wrangler.toml](wrangler.toml) /
+[server/worker.ts](server/worker.ts). The `[assets]` block serves `dist/`
+from the same Worker (SPA fallback to `index.html`), while `/api/*` goes
+to Hono — no separate Pages/static host needed. Set the model key with
+`wrangler secret put MODEL_API_KEY`.

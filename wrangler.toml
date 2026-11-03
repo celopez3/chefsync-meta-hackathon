@@ -1,4 +1,12 @@
-name = "chefsync-ai"
+name = "chefsync-meta-hackathon"
 main = "server/worker.ts"
 compatibility_date = "2025-05-01"
+
+# Serve the built React app from the same Worker as /api/*.
+# Without this block dist/ is built but never uploaded, so / 404s.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
 # Deploy: npx wrangler deploy   (set MODEL_API_KEY via `wrangler secret put` to go live)
