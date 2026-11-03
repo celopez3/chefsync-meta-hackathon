@@ -1,0 +1,4 @@
+name = "chefsync-ai"
+main = "server/worker.ts"
+compatibility_date = "2025-05-01"
+# Deploy: npx wrangler deploy   (set MODEL_API_KEY via `wrangler secret put` to go live)

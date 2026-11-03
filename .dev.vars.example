@@ -1,0 +1,7 @@
+# One Meta key for both models (Meta dashboard -> Generate API Key).
+# Locally: put this in .env (gitignored) - server/node.ts loads it.
+# Cloudflare: use `wrangler secret put MODEL_API_KEY` instead.
+MODEL_API_KEY=
+# Optional override; defaults to https://api.meta.ai/v1
+META_API_BASE_URL=
+PORT=8787
