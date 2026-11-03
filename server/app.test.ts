@@ -56,6 +56,11 @@ describe("pantry + dictation", () => {
     expect(parseDictatedItems("olive oil, garlic and smoked paprika.")).toEqual(["Olive Oil", "Garlic", "Smoked Paprika"]);
     expect(parseDictatedItems("")).toEqual([]);
   });
+  it("corrects kitchen homophones from speech recognition", () => {
+    expect(parseDictatedItems("flower")).toEqual(["Flour"]);
+    expect(parseDictatedItems("flower and brown sugar")).toEqual(["Flour", "Brown Sugar"]);
+    expect(parseDictatedItems("cauliflower and powered sugar")).toEqual(["Cauliflower", "Powdered Sugar"]);
+  });
 });
 
 describe("pantry starter set", () => {

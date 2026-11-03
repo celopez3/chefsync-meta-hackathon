@@ -62,7 +62,6 @@ export default function PantryPanel({ pantry, onChange, defaultOpen = false }: {
             className="min-h-11 rounded-full bg-[#bb6b00] px-6 text-sm font-black text-[#210f04] shadow-[0_6px_16px_rgba(33,15,4,0.18)] hover:bg-[#934b00] hover:text-white">
             Select most common
           </button>
-          <DictateButton label="Dictate pantry" onItems={addMany} />
           <button type="button" disabled={scanning} onClick={() => fileRef.current?.click()}
             className="min-h-11 rounded-full bg-[#934b00] px-6 text-sm font-bold text-white shadow-[0_6px_16px_rgba(33,15,4,0.18)] hover:bg-[#452103] disabled:opacity-50">
             {scanning ? "Scanning rack…" : "Snap spice rack"}
@@ -100,10 +99,11 @@ export default function PantryPanel({ pantry, onChange, defaultOpen = false }: {
         </div>
       )}
 
-      <form className="mt-4 flex max-w-md flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) { addMany([custom]); setCustom(""); } }}>
-        <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Add a staple — e.g. Garam Masala"
+      <form className="mt-4 flex max-w-md items-start gap-2" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) { addMany([custom]); setCustom(""); } }}>
+        <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Add a staple — type it, or tap the mic and say it"
           className="min-h-12 min-w-0 flex-1 rounded-full border-2 border-stone-300 px-4 text-base font-medium focus:border-[#210f04] focus:outline-none" aria-label="Add a pantry item manually" />
-        <button className="min-h-12 rounded-full bg-[#210f04] px-6 font-bold text-white">Add</button>
+        <DictateButton iconOnly label="Dictate a pantry item" onItems={addMany} />
+        <button className="min-h-12 shrink-0 rounded-full bg-[#210f04] px-6 font-bold text-white">Add</button>
       </form>
       </>}
       {note && <p className="mt-3 rounded-2xl bg-[#f6ead6] px-3 py-2 text-sm font-medium text-[#452103]" role="status">{note}</p>}
