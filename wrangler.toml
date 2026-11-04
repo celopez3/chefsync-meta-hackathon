@@ -9,4 +9,13 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
+# Public browser config. These must live here (not only in the dashboard)
+# or each `wrangler deploy` overwrites the dashboard values and Cloudflare
+# warns they are missing from the config. The anon key is publishable by
+# design — it ships in the browser bundle; RLS protects the data.
+# MODEL_API_KEY stays a dashboard Secret and is never committed here.
+[vars]
+VITE_SUPABASE_URL = "https://tvxbswoooikpxssnupvm.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_UFDbgL1A4HZP-XiJFGB4Xw_BcCutOJL"
+
 # Deploy: npx wrangler deploy   (set MODEL_API_KEY via `wrangler secret put` to go live)
