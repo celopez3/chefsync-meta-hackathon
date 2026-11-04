@@ -3,12 +3,18 @@ import {
   IonApp, IonBadge, IonContent, IonFooter, IonHeader, IonIcon, IonLabel,
   IonPage, IonTabBar, IonTabButton, IonTitle, IonToolbar,
 } from "@ionic/react";
-import { basketOutline, bookmarkOutline, restaurantOutline } from "ionicons/icons";
+import { basketOutline, bookmarkOutline, personOutline, restaurantOutline } from "ionicons/icons";
 import MultiImageUploader, { type LocalPhoto } from "./components/MultiImageUploader";
 import IngredientChecklist from "./components/IngredientChecklist";
 import PantryPanel from "./components/PantryPanel";
 import RecipeRow from "./components/RecipeRow";
 import RecipeModal from "./components/RecipeModal";
+import ProfilePanel from "./components/ProfilePanel";
+import LoadingOverlay, { GENERATE_MESSAGES } from "./components/LoadingOverlay";
+import SubstituteModal, { type SubTarget } from "./components/SubstituteModal";
+import { loadProfile, saveProfile } from "./lib/profile";
+import { profileDietaryStrings, type ProfilePrefs } from "../shared/profile";
+import type { Substitute } from "../shared/substitutions";
 import AuthBar from "./components/AuthBar";
 import { compressImage } from "./lib/compress";
 import { apiUrl } from "./lib/api";
@@ -27,17 +33,14 @@ const INTENTS: { id: Intent; label: string; hint: string }[] = [
   { id: "batch_prep", label: "Batch prep", hint: "Cook once, eat all week" },
   { id: "quick_snack", label: "Quick snack", hint: "15 minutes or less" },
 ];
-const DIETARY = ["Vegetarian", "Vegan", "Gluten-free", "High-protein", "Low-carb"];
-
-type Tab = "cook" | "pantry" | "saved";
+type Tab = "cook" | "pantry" | "saved" | "profile";
 
 export default function App() {
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [intent, setIntent] = useState<Intent>("single_meal");
-  const [dietary, setDietary] = useState<string[]>([]);
-  const [plans, setPlans] = useState<Plan[]>([]);
+{}  const [plans, setPlans] = useState<Plan[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [demoDetect, setDemoDetect] = useState(false);
   const [busy, setBusy] = useState<"detect" | "generate" | null>(null);
@@ -47,6 +50,9 @@ export default function App() {
   const [saved, setSaved] = useState<SavedRecipe[]>([]);
   const [tab, setTab] = useState<Tab>("cook");
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
+  const [profile, setProfile] = useState<ProfilePrefs | null>(null);
+  const [subTarget, setSubTarget] = useState<SubTarget | null>(null);
+  const [sessionSwaps, setSessionSwaps] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!supabase) return;
@@ -58,8 +64,8 @@ export default function App() {
   useEffect(() => {
     let live = true;
     void (async () => {
-      const [p, s] = await Promise.all([loadPantry(user), loadSaved(user)]);
-      if (live) { setPantry(new Set(p)); setSaved(s); }
+      const [p, s, prof] = await Promise.all([loadPantry(user), loadSaved(user), loadProfile(user)]);
+      if (live) { setPantry(new Set(p)); setSaved(s); setProfile(prof); }
     })();
     return () => { live = false; };
   }, [user]);
@@ -67,6 +73,11 @@ export default function App() {
   function changePantry(next: Set<string>) {
     setPantry(next);
     void savePantry(user, [...next]);
+  }
+
+  function changeProfile(next: ProfilePrefs) {
+    setProfile(next);
+    void saveProfile(user, next);
   }
 
   const scannedKey = useRef("");
@@ -112,10 +123,18 @@ export default function App() {
     try {
       const res = await fetch(apiUrl("/api/recipes/generate"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, selectedIngredients: [...selected], intent, dietaryPreferences: dietary, pantryItems: [...pantry] }),
+        body: JSON.stringify({
+          sessionId, selectedIngredients: [...selected], intent,
+          dietaryPreferences: profile ? profileDietaryStrings(profile) : [],
+          pantryItems: [...pantry],
+          avoidIngredients: profile?.avoid ?? [],
+          servings: profile?.servings,
+          heatLevel: profile?.heat,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
+      setSessionSwaps({});
       setPlans(RecipeResponseSchema.parse(json).plans);
     } catch (e) { setError(e instanceof Error ? e.message : "Generation failed"); }
     finally { setBusy(null); }
@@ -145,6 +164,25 @@ export default function App() {
       : p;
     setPlans((list) => list.map(clear));
     setActivePlan((p) => (p ? clear(p) : p));
+  }
+
+  /** Chosen swaps for a plan: learned (profile) + this session, keyed by missing-item name. */
+  function swapsFor(plan: Plan): Record<string, string> {
+    const all = { ...(profile?.substitutions ?? {}), ...sessionSwaps };
+    const out: Record<string, string> = {};
+    for (const m of plan.missingPantryStaples ?? []) {
+      const hit = Object.entries(all).find(([k]) => normalizeKey(k) === normalizeKey(m));
+      if (hit) out[m] = hit[1];
+    }
+    return out;
+  }
+
+  function useSubstitute(ingredient: string, sub: Substitute) {
+    setSessionSwaps((s) => ({ ...s, [ingredient]: sub.name }));
+    if (profile) {
+      changeProfile({ ...profile, substitutions: { ...profile.substitutions, [ingredient]: sub.name } });
+    }
+    setSubTarget(null);
   }
 
   async function onSave(plan: Plan) {
@@ -187,9 +225,8 @@ export default function App() {
                 <div className="mt-4">
                   <MultiImageUploader photos={photos} onChange={setPhotos} disabled={busy !== null} />
                 </div>
-                {busy === "detect" && (
-                  <p className="mt-4 rounded-2xl bg-[#faf0dd] px-4 py-3 text-center text-[15px] font-black text-[#934b00]" role="status">Scanning your photos…</p>
-                )}
+                {busy === "detect" && <LoadingOverlay />}
+                {busy === "generate" && <LoadingOverlay messages={GENERATE_MESSAGES} caption="Writing your recipes…" />}
                 {demoDetect && ingredients.length > 0 && (
                   <p className="mt-4 rounded-2xl border-2 border-[#bb6b00] bg-[#faf0dd] px-4 py-2.5 text-sm font-medium text-[#934b00]" role="status">
                     Demo mode: no Meta API key is configured, so these are sample detections. Add <code>MODEL_API_KEY</code> to your <code>.env</code> and restart for real SAM 3.1 results.
@@ -218,13 +255,16 @@ export default function App() {
                           </button>
                         ))}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {DIETARY.map((d) => (
-                          <button key={d} type="button" aria-pressed={dietary.includes(d)}
-                            onClick={() => setDietary((x) => x.includes(d) ? x.filter((y) => y !== d) : [...x, d])}
-                            className={`min-h-10 rounded-full border-2 px-3.5 text-sm font-bold ${dietary.includes(d) ? "border-[#210f04] bg-[#690500] text-white" : "border-stone-300 text-stone-600 hover:border-[#210f04]"}`}>{d}</button>
-                        ))}
-                      </div>
+                      <button type="button" onClick={() => setTab("profile")}
+                        className="mt-3 flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-full border-2 border-stone-300 px-4 text-left text-sm font-bold text-stone-600">
+                        <span>
+                          {profile && (profile.dietary.length || profile.allergens.length || profile.avoid.length)
+                            ? [...profile.dietary, ...profile.allergens.map((a) => `No ${a.toLowerCase()}`), ...profile.avoid.map((a) => `No ${a.toLowerCase()}`)].join(" · ")
+                            : "No preferences set"}
+                          {profile ? ` · Serves ${profile.servings} · ${profile.heat}` : ""}
+                        </span>
+                        <span className="font-black text-[#690500]">Profile</span>
+                      </button>
                       <button type="button" onClick={generate} disabled={selected.size === 0 || busy !== null}
                         className="mt-5 min-h-14 w-full rounded-full border-2 border-[#210f04] bg-[#210f04] text-base font-black text-white shadow-[4px_4px_0_#690500] disabled:opacity-40 disabled:shadow-none">
                         {busy === "generate" ? "Writing your recipes…" : `Generate recipes from ${selected.size} ingredient${selected.size === 1 ? "" : "s"}`}
@@ -283,6 +323,18 @@ export default function App() {
               </main>
             )}
 
+            {tab === "profile" && (
+              <main>
+                <h2 className="font-[family-name:var(--font-display)] text-[26px] font-black leading-tight">My profile</h2>
+                <p className="mt-1 text-[15px] font-medium text-stone-600">Preferences that shape every recipe and every substitute list.</p>
+                <div className="mt-4">
+                  {profile
+                    ? <ProfilePanel profile={profile} onChange={changeProfile} user={user} />
+                    : <p className="text-sm font-medium text-stone-600">Loading your preferences…</p>}
+                </div>
+              </main>
+            )}
+
             <footer className="mt-14 border-t-2 border-stone-200 pt-4 text-sm font-medium text-stone-500">
               ChefSync AI — SAM 3.1 detection · Muse Spark recipes · Ionic + React + Supabase.
             </footer>
@@ -305,12 +357,23 @@ export default function App() {
               <IonLabel style={{ fontWeight: 800 }}>Saved</IonLabel>
               {saved.length > 0 && <IonBadge style={{ "--background": "#690500" } as React.CSSProperties}>{saved.length}</IonBadge>}
             </IonTabButton>
+            <IonTabButton tab="profile" selected={tab === "profile"} onClick={() => setTab("profile")}>
+              <IonIcon icon={personOutline} />
+              <IonLabel style={{ fontWeight: 800 }}>Profile</IonLabel>
+            </IonTabButton>
           </IonTabBar>
         </IonFooter>
       </IonPage>
 
       <RecipeModal plan={activePlan} saved={activeSaved} onClose={() => setActivePlan(null)}
-        onSave={onSave} onRemove={activeSaved ? onRemoveSaved : undefined} onHaveIt={haveIt} />
+        onSave={onSave} onRemove={activeSaved ? onRemoveSaved : undefined} onHaveIt={haveIt}
+        onMissingTap={(ingredient) => setSubTarget({ ingredient })}
+        swaps={activePlan ? swapsFor(activePlan) : {}} />
+      {profile && (
+        <SubstituteModal target={subTarget} profile={profile} onClose={() => setSubTarget(null)}
+          onUse={useSubstitute}
+          onHaveIt={(ingredient) => { if (activePlan) haveIt(activePlan, [ingredient]); setSubTarget(null); }} />
+      )}
     </IonApp>
   );
 }

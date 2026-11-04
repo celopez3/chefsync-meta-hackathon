@@ -4,13 +4,15 @@ import RecipeCard from "./RecipeCard";
 
 /** Full-screen recipe detail sheet. Lists stay short; this is where
  *  steps, missing items, dictation and save/remove live. */
-export default function RecipeModal({ plan, saved, onClose, onSave, onRemove, onHaveIt }: {
+export default function RecipeModal({ plan, saved, onClose, onSave, onRemove, onHaveIt, onMissingTap, swaps = {} }: {
   plan: Plan | null;
   saved?: boolean;
   onClose: () => void;
   onSave?: (plan: Plan) => void;
   onRemove?: (plan: Plan) => void;
   onHaveIt?: (plan: Plan, items: string[]) => void;
+  onMissingTap?: (ingredient: string) => void;
+  swaps?: Record<string, string>;
 }) {
   return (
     <IonModal isOpen={plan !== null} onDidDismiss={onClose} breakpoints={[0, 1]} initialBreakpoint={1}>
@@ -25,7 +27,7 @@ export default function RecipeModal({ plan, saved, onClose, onSave, onRemove, on
       <IonContent>
         {plan && (
           <div className="mx-auto max-w-2xl px-4 pb-12 pt-5 sm:px-6">
-            <RecipeCard plan={plan} onHaveIt={onHaveIt} />
+            <RecipeCard plan={plan} onHaveIt={onHaveIt} onMissingTap={onMissingTap} swaps={swaps} />
             <div className="mb-2 mt-5 flex flex-wrap gap-2 px-1">
               {onSave && (
                 <button type="button" disabled={saved} onClick={() => onSave(plan)}

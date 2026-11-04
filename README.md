@@ -61,6 +61,16 @@ mistaken for live model output. For Cloudflare, use
   voice — in the checklist, the pantry, and on each recipe's missing-items
   list ("say what you have" ticks them off and saves them to your pantry).
   Unsupported browsers keep the text inputs.
+- **Profile:** the Profile tab stores dietary patterns, allergens, an
+  avoid list, servings, heat level, and learned substitutes. Run
+  [002_profile.sql](supabase/migrations/002_profile.sql) after the first
+  migration for account sync (local storage otherwise). Preferences are
+  sent with every recipe generation.
+- **Substitutes:** tap a missing item in a recipe to open tested swaps
+  from the curated database in [shared/substitutions.ts](shared/substitutions.ts)
+  (instant, works in demo mode). The list hides anything containing your
+  allergens, ranks matches for your diet, and choosing one marks the item
+  covered and remembers the swap in your profile.
 
 ## API
 

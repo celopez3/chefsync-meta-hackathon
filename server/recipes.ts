@@ -74,7 +74,21 @@ export function generatePlans(req: GenerateRequest): Plan[] {
     },
   ];
 
-  const filtered = base.map((p) => ({ ...p, missingPantryStaples: withoutPantry(p.missingPantryStaples ?? [], req.pantryItems) }));
+  const profileNotes: string[] = [];
+  if (req.servings) profileNotes.push(`Serves ${req.servings}: scale quantities to suit.`);
+  if (req.heatLevel && req.heatLevel !== "Medium") {
+    profileNotes.push(req.heatLevel === "None"
+      ? "No heat: skip chili and go easy on the black pepper."
+      : `Heat level ${req.heatLevel.toLowerCase()}: adjust chili flakes and pepper to taste.`);
+  }
+  if ((req.avoidIngredients ?? []).length) {
+    profileNotes.push(`Strictly avoid: ${(req.avoidIngredients ?? []).join(", ")}.`);
+  }
+  const filtered = base.map((p) => ({
+    ...p,
+    missingPantryStaples: withoutPantry(p.missingPantryStaples ?? [], req.pantryItems),
+    instructions: [...p.instructions, ...profileNotes],
+  }));
   if (req.intent === "quick_snack") return [filtered[2], filtered[0]];
   if (req.intent === "batch_prep") return [filtered[1], filtered[0], filtered[2]];
   return filtered;
@@ -103,6 +117,9 @@ export async function generatePlansWithMeta(req: GenerateRequest, env: MetaEnv):
         `You are ChefSync. Create 3 recipe plans for ${intentLabel} using these ingredients: ${req.selectedIngredients.join(", ")}.` +
         ((req.dietaryPreferences ?? []).length ? ` Dietary preferences: ${(req.dietaryPreferences ?? []).join(", ")}.` : "") +
         ((req.pantryItems ?? []).length ? ` The cook already owns these pantry staples, so never list them in missingPantryStaples: ${(req.pantryItems ?? []).join(", ")}.` : "") +
+        ((req.avoidIngredients ?? []).length ? ` Never use or suggest these ingredients (the cook avoids them): ${(req.avoidIngredients ?? []).join(", ")}.` : "") +
+        (req.servings ? ` Write for ${req.servings} servings.` : "") +
+        (req.heatLevel ? ` Heat level: ${req.heatLevel}.` : "") +
         ` Return only JSON: {"plans":[{"title":string,"prepTimeMinutes":number,"difficulty":string,"usedIngredients":[string],"missingPantryStaples":[string],"instructions":[string]}]}. No markdown, no extra text.`,
     });
     const plans = parsePlans(responseText(res));

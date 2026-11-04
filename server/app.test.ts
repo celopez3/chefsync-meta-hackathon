@@ -4,6 +4,9 @@ import { dedupeIngredients, normalizeName } from "./dedup.js";
 import { generatePlans, parsePlans, withoutPantry } from "./recipes.js";
 import { parseDictatedItems } from "../src/lib/dictation.js";
 import { ALL_PANTRY_ITEMS, COMMON_PANTRY_ITEMS } from "../shared/pantry.js";
+import { findSubstitutions, hasSubstitutions } from "../shared/substitutions.js";
+import { nextMessageIndex, SCAN_MESSAGES } from "../src/components/LoadingOverlay.js";
+import { mergeSavedRecipes, savedRecipeKey } from "../shared/saved.js";
 import { parseIngredientText, parseSamBoxes } from "./sam.js";
 
 describe("normalize + dedupe", () => {
@@ -69,6 +72,58 @@ describe("pantry starter set", () => {
     expect(COMMON_PANTRY_ITEMS).toContain("Brown Sugar");
     expect(COMMON_PANTRY_ITEMS).toContain("Olive Oil");
     expect(COMMON_PANTRY_ITEMS.every((i) => ALL_PANTRY_ITEMS.includes(i))).toBe(true);
+  });
+});
+
+describe("substitutions", () => {
+  it("finds flour swaps and hides nut options for a nut allergy", () => {
+    const plain = findSubstitutions("Flour");
+    expect(plain.map((s) => s.name)).toContain("Almond Flour");
+    const nutFree = findSubstitutions("Flour", { allergens: ["Nuts"], dietary: [] });
+    expect(nutFree.length).toBeGreaterThan(0);
+    expect(nutFree.map((s) => s.name)).not.toContain("Almond Flour");
+    const gf = findSubstitutions("plain flour", { allergens: ["Gluten"], dietary: ["Gluten-free"] });
+    expect(gf[0].suitableFor).toContain("Gluten-free");
+    expect(hasSubstitutions("olive oil")).toBe(true);
+    expect(findSubstitutions("Unobtainium")).toEqual([]);
+  });
+  it("profile servings and heat land in generated plans", () => {
+    const plans = generatePlans({ sessionId: "s", selectedIngredients: ["Eggs", "Spinach"], intent: "single_meal", servings: 4, heatLevel: "Hot", avoidIngredients: ["Coriander"] });
+    const text = plans[0].instructions.join(" ");
+    expect(text).toMatch(/Serves 4/);
+    expect(text).toMatch(/Heat level hot/);
+    expect(text).toMatch(/Coriander/);
+  });
+});
+
+describe("scan overlay messages", () => {
+  it("rotates to a different message every time", () => {
+    expect(SCAN_MESSAGES.length).toBeGreaterThan(5);
+    for (let cur = 0; cur < SCAN_MESSAGES.length; cur++) {
+      for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+        const next = nextMessageIndex(cur, SCAN_MESSAGES.length, roll);
+        expect(next).not.toBe(cur);
+        expect(next).toBeGreaterThanOrEqual(0);
+        expect(next).toBeLessThan(SCAN_MESSAGES.length);
+      }
+    }
+    expect(nextMessageIndex(0, 1, 0.5)).toBe(0);
+  });
+});
+
+describe("saved-recipe merge", () => {
+  const plan = { title: "Egg Skillet", prepTimeMinutes: 20, difficulty: "Easy", usedIngredients: ["Eggs", "Spinach"], missingPantryStaples: [], instructions: ["Whisk", "Fry"] };
+  it("unions cloud and local without duplicating the same recipe", () => {
+    const cloud = [{ id: "cloud-1", savedAt: "2026-01-01", plan }];
+    const local = [
+      { id: "local-1", savedAt: "2026-01-02", plan: { ...plan, title: "egg skillet " } },
+      { id: "local-2", savedAt: "2026-01-02", plan: { ...plan, title: "Other Dish" } },
+    ];
+    const { merged, toUpload } = mergeSavedRecipes(cloud, local);
+    expect(merged.map((m) => m.id)).toEqual(["cloud-1", "local-2"]);
+    expect(toUpload.map((m) => m.id)).toEqual(["local-2"]);
+    expect(savedRecipeKey(plan)).toBe(savedRecipeKey({ ...plan, usedIngredients: ["Spinach", "Eggs"] }));
+    expect(savedRecipeKey(plan)).not.toBe(savedRecipeKey({ ...plan, instructions: ["Bake"] }));
   });
 });
 

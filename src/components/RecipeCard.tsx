@@ -3,13 +3,17 @@ import DictateButton from "./DictateButton";
 
 const BANDS = ["bg-[#690500]", "bg-[#934b00]", "bg-[#bb6b00]"];
 
-export default function RecipeCard({ plan, index = 0, onSave, saved, onHaveIt }: {
+export default function RecipeCard({ plan, index = 0, onSave, saved, onHaveIt, onMissingTap, swaps = {} }: {
   plan: Plan;
   index?: number;
   onSave?: (plan: Plan) => void;
   saved?: boolean;
   /** User dictated/confirmed they already have a missing item. */
   onHaveIt?: (plan: Plan, items: string[]) => void;
+  /** Tap a missing item to see substitutes. */
+  onMissingTap?: (ingredient: string) => void;
+  /** ingredient -> chosen substitute (shown as covered). */
+  swaps?: Record<string, string>;
 }) {
   const missing = plan.missingPantryStaples ?? [];
   return (
@@ -26,10 +30,12 @@ export default function RecipeCard({ plan, index = 0, onSave, saved, onHaveIt }:
           <div className="mt-3 rounded-2xl bg-[#f9e7d7] p-3">
             <p className="text-sm"><strong className="font-black text-[#210f04]">Missing items:</strong></p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {missing.map((m) => (
-                <button key={m} type="button" title="I have this — add to pantry"
-                  onClick={() => onHaveIt?.(plan, [m])}
-                  className="rounded-full border-2 border-[#690500] bg-white px-2.5 py-0.5 text-sm font-bold text-[#452103] hover:bg-[#690500] hover:text-white">{m}</button>
+              {missing.map((m) => swaps[m] ? (
+                <span key={m} className="rounded-full bg-[#934b00] px-3 py-1 text-sm font-bold text-white">{m} ✓ via {swaps[m]}</span>
+              ) : (
+                <button key={m} type="button" title="See substitutes"
+                  onClick={() => onMissingTap?.(m)}
+                  className="min-h-9 rounded-full border-2 border-[#690500] bg-white px-3 text-sm font-bold text-[#452103] hover:bg-[#690500] hover:text-white">{m} — swap?</button>
               ))}
             </div>
             <div className="mt-2.5 flex items-center gap-2">

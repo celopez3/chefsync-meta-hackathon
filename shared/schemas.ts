@@ -21,6 +21,9 @@ export const GenerateRequestSchema = z.object({
   intent: z.enum(["single_meal", "batch_prep", "quick_snack"]),
   dietaryPreferences: z.array(z.string()).optional().default([]),
   pantryItems: z.array(z.string()).optional().default([]),
+  avoidIngredients: z.array(z.string()).optional().default([]),
+  servings: z.number().int().min(1).max(12).optional(),
+  heatLevel: z.string().optional(),
 });
 
 export const DetectContextSchema = z.enum(["kitchen", "spice_rack"]);
